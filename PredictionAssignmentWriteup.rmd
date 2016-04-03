@@ -1,0 +1,90 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Fred Bosman"
+date: "2 april 2016"
+output: html_document
+---
+
+##Summary
+
+In this report we will examine data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. We will try to predict which of the ways the was used.
+
+##Load and clean data
+
+First we set the working directory and load the necessary libraries.
+
+```{r libaries}
+setwd("C:/Fred/_werk/Coursera/PracticalMachineLearning_PredictionAssignment")
+library(caret)
+library(randomForest)
+```
+
+Next we will download the files and load them into R. Because the CSV-file containing the training data is large, we will first check if it's already downloaded. 
+
+```{r load_files}
+# check if file is already downloaded
+if (!file.exists("pml-training.csv")) {
+  trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+  download.file(trainUrl, "pml-training.csv")
+  download.file(testUrl, "pml-testing.csv")
+  
+  # save download date
+  dateDownloaded <- date()
+}
+
+# load the data with
+training <- read.csv("pml-training.csv", header=T, na.strings=c("NA", "#DIV/0!"))
+testing <- read.csv("pml-testing.csv", header=T, na.string=c("NA", "#DIV/0!"))
+```
+
+The training data has a lot of NA's. We will exclude all variables with at least one NA, so the training of the model will be easier. 
+The data also has a few variables that contain information about the test subject and the time when the data was gathered. We won't need these for our prediction. We will omit the first eight variables. 
+
+
+```{r clean_data}
+training2 <- training[, apply(training, 2, function(x) !any(is.na(x)))]
+training3 <- training2[,-c(1:8)]
+testing2 <- testing[,-c(1:8)]
+dim(training3)
+```
+
+
+##Data partitioning and modelling
+
+Next we will partition the training data into an training and validation set, so we can evaluate our model before applying it to the 20 test records.
+
+```{r partition}
+set.seed (1536)
+inTrain <- createDataPartition(y=training3$classe, p = 0.75, list = FALSE)
+trainSet <- training3[inTrain,]
+validationSet <- training3[-inTrain,]
+
+# Dimensions
+dim(trainSet)
+dim(validationSet)
+
+```
+
+
+Now we can build the model. We will use Random Forest with K-fold cross-validation with 5 folds.
+
+```{r modelfit}
+set.seed(402)
+trainingControls <- trainControl(method = "cv", number = 5, allowParallel = TRUE, verbose = TRUE)
+modfit <- train(classe ~ ., method="rf", data=trainSet, trControl = trainingControls, verbose = FALSE)
+```
+
+## Predictions
+
+Let's make some predictions.
+
+```{r prediction}
+pred <- predict(modfit,validationSet)
+
+confusionMatrix(pred, validationSet$classe)
+```
+
+We have achieved a model with 99.2% accuracy. 
+
